@@ -4,7 +4,7 @@ import types
 
 class Electrolink:
     # Constructor, give name of your board
-    def __init__(self, objectName, commandTopic, replyTopic, errorTopic):
+    def __init__(self, objectName):
 
         # Write here board name, board info and board capabilities
         # Name will be set in constructor
@@ -18,7 +18,7 @@ class Electrolink:
         self.callbacks = {
                   "ping":         {"call": self.ping,          "parameters": None,         "description": "Verify if board responds, will respond 1"},
                   "getInfo":      {"call": self.getInfo,       "parameters": None,         "description": "Get board info"}, 
-                  "getCallbacks": {"call": self.getCallbacks,  "parameters": None,         "description": "Get available instructions to call"},
+                  "getServices":  {"call": self.getServices,   "parameters": None,         "description": "Get available instructions to call"},
                   "reset":        {"call": self.reset,         "parameters": None,         "description": "Hardware reset electronics"},
                   "setAckReceipt":{"call": self.setAckReceipt, "parameters": "true/false", "description": "Avis de reception"}
                   }
@@ -27,18 +27,25 @@ class Electrolink:
         self.ackReceipt = False
         # Name of
         self.CLIENT_ID = objectName
-        self.info["id"] =  self.CLIENT_ID
-
+        self.info["name"] =  self.CLIENT_ID
+        # Name of board is used as root name
         # Command topic is used to receive instructions
-        self.REQUEST_TOPIC = "mainflux/channels/"+commandTopic+"/msg"
+        self.REQUEST_TOPIC = self.CLIENT_ID+"/command"
         # Reply topic is used to answer when there is need to 
-        self.REPLY_TOPIC =  "mainflux/channels/"+replyTopic+"/msg"
+        self.ANSWER_TOPIC =  self.CLIENT_ID+"/reply"
         # Error tocpi is used to explain what caused error
-        self.ERROR_TOPIC = "mainflux/channels/"+errorTopic+"/msg"
+        self.ERROR_TOPIC =   self.CLIENT_ID+"/error"
+        self.COMMON_TOPIC = "common/command"
+        self.COMMON_REPLY_TOPIC = "common/reply"
 
-        self.info["requestTopic"] =  self.CLIENT_ID
-        self.info["replyTopic"] =  self.REPLY_TOPIC
-        self.info["errorTopic"] =  self.ERROR_TOPIC
+        self.info["command"] = self.REQUEST_TOPIC
+        self.info["reply"]   = self.ANSWER_TOPIC
+        self.info["error"]   = self.ERROR_TOPIC
+
+        self.info["common_command"]  = self.COMMON_TOPIC
+        self.info["common_reply"]  = self.COMMON_REPLY_TOPIC
+
+        self.info["version"] = "1.0"
 
     # Connects to broker using native mqtt interface
     # Aftr connexion subscription to command topic will be done
@@ -52,24 +59,21 @@ class Electrolink:
 
         self.mqttc.connect(self.server, port, keepalive)
         self.mqttc.subscribe(self.REQUEST_TOPIC, 0)
+        self.mqttc.subscribe(self.COMMON_TOPIC, 0)
         self.mqttc.loop_start()
-
-        # self.client = MQTTClient(self.CLIENT_ID, self.server, port, user, password, keepalive,
-        #          ssl, ssl_params)
-        # self.client.set_callback(self.subscriptionCallback)
-        #
-        # self.client.connect()
-        # self.client.subscribe(self.REQUEST_TOPIC)
 
     # Callback to be called when receive the message
     def subscriptionCallback(self, mqttc, obj, msg):
 
         topic = str(msg.topic)
         data = loads(str(msg.payload))
-
+        print(topic, data)
         method = data["method"]
         params = data["params"]
 
+        ANSWER = self.ANSWER_TOPIC
+        if (topic in self.COMMON_TOPIC) :
+            ANSWER = self.COMMON_REPLY_TOPIC
         #print(method, params)
         # Detect if we are in mode like jsonrpc with id for each message
         msgId = None
@@ -100,12 +104,12 @@ class Electrolink:
                         if not(msgId is None):
                             p["id"] = msgId
                         out = dumps(p)
-                        self.mqttc.publish(self.REPLY_TOPIC, out)
+                        self.mqttc.publish(ANSWER, out)
                         cnt+=1
 
                     p = {"requested":method, "params":params, "value":0, "msgPart":-1} # END
                     out = dumps(p)
-                    self.mqttc.publish(self.REPLY_TOPIC, out)
+                    self.mqttc.publish(ANSWER, out)
                 # this is nomal case when there is reply to be colleceted
                 else :
 
@@ -120,7 +124,7 @@ class Electrolink:
                     if not(msgId is None):
                         p["id"] = msgId
                     out = dumps(p)
-                    self.mqttc.publish(self.REPLY_TOPIC, out)
+                    self.mqttc.publish(ANSWER, out)
             # case when there is no answer or confirmation answer is requested
             else :
                 if (self.ackReceipt is True):
@@ -128,7 +132,7 @@ class Electrolink:
                     if not(msgId is None):
                         p["id"] = msgId
                     out = dumps(p)
-                    self.mqttc.publish(self.REPLY_TOPIC, out)
+                    self.mqttc.publish(ANSWER, out)
 
         #These are common errors
         except IndexError:
@@ -150,7 +154,7 @@ class Electrolink:
         self.callbacks.update(newCallbacks)
 
     # Returns list of available functions that can be called
-    def getCallbacks(self, arg):
+    def getServices(self, arg):
         # Ignore call from the dictionary when sending
         # It's not trivial to make copy of dictionary in micropython
         # This is manual method
@@ -178,7 +182,7 @@ class Electrolink:
 
     # Returns number 1 to show that he is alive
     def ping(self, arg):
-        return 1
+        return self.CLIENT_ID
 
     def reset(self, arg):
         import machine

@@ -6,11 +6,5 @@
     "ssl_params":{},
     "port": 1883, 
     "keepalive":60,
-    "device_id": "weioA",
-    "command_topic": "command",
-    "reply_topic": "reply",
-    "error_topic": "error",
-    "console_command": "console/command",
-    "console_reply_topic": "console/reply",
-    "console_error_topic": "console/error"
+    "name": "weioA"
 }

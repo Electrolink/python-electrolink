@@ -6,7 +6,7 @@ import time
 config = loads((open("config.json", "r").read()))
 
 # Give board a server name
-e = electrolink.Electrolink(config["device_id"], config["command_topic"], config["reply_topic"], config["error_topic"])
+e = electrolink.Electrolink(config["name"])
 
 # extend Electrolink with additional fnctions
 e.addCallbacks(electroFiles.callbacks)
